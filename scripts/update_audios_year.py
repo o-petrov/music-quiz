@@ -17,11 +17,10 @@ def main():
         print("Все года проставлены")
         return
 
-    minutes = len(audios) / 60
-    print(
-        f"Обновление годов для всех {len(audios)} треков с musicbrainz.org займёт около",
-        f"{minutes / 60:.1} часов" if minutes > 59 else f"{minutes:.1} минут"
-    )
+    in_seconds = len(audios) + 1
+    in_minutes, ss = in_seconds // 60, in_seconds % 60
+    hh, mm = in_minutes // 60, in_minutes % 60
+    print(f"Обновление годов для всех {len(audios)} треков с musicbrainz.org займёт {hh}:{mm:2}:{ss:2}")
 
     for audio in audios:
         query = urlencode({"query": audio["title"], "fmt": "json"})
