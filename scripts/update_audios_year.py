@@ -1,7 +1,7 @@
-from collections import defaultdict
 from urllib.request import urlopen, Request
 from urllib.parse import urlencode
 from time import sleep
+import json
 
 from src.database import database
 
@@ -20,7 +20,7 @@ def main():
     in_seconds = len(audios) + 1
     in_minutes, ss = in_seconds // 60, in_seconds % 60
     hh, mm = in_minutes // 60, in_minutes % 60
-    print(f"Обновление годов для всех {len(audios)} треков с musicbrainz.org займёт {hh}:{mm:2}:{ss:2}")
+    print(f"Обновление годов для всех {len(audios)} треков с musicbrainz.org займёт {hh}:{mm:02}:{ss:02}")
 
     for audio in audios:
         query = urlencode({"query": audio["title"], "fmt": "json"})
@@ -39,7 +39,7 @@ def main():
             return set(credited["name"] for credited in rec["artist-credit"])
         releases = [
             r["first-release-date"] for r in recs["recordings"]
-            if r["title"] == audio["title"] and artists(rec) == set(audio["artists"])
+            if r["title"] == audio["title"] and artists(r) == set(audio["artists"])
         ]
 
         # так как даты мб вида '2023' и '2023-12-23' то просто сортируем алфавитно
