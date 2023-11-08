@@ -2,6 +2,8 @@ from urllib.request import urlopen, Request
 from urllib.parse import urlencode
 from time import sleep
 import json
+import re
+import unicodedata
 
 from src.database import database
 
@@ -10,9 +12,6 @@ tracks_not_found = []
 
 
 def norm(name):
-    for c in name:
-        seen_cats[unicodedata.category(c)].add(c)
-
     # убираем странные пробелы и регистр
     name = re.sub(r"\s+", " ", name).strip().lower()
     # убираем диакритику
@@ -26,7 +25,7 @@ def norm(name):
         return {name, surname2[0][0]}
 
     alts = re.findall(r"\(([^)]*)\)", name)
-    alts += re.findall(r"\[([^\]]*)\]", name)
+    alts += re.findall(r"\[([^]]*)]", name)
     alts += re.findall(r'"([^"]*)"', name)
     alts += re.findall(r'«([^»]*)»', name)
     if len(alts) > 1:
@@ -147,7 +146,7 @@ def main():
 
     # выборка песен без обновлённого года выпуска
     # мэтчим с MB по артистам и названию
-    audios = database.audios.find({"first_release_MB": {"$exists": False}}, {"link": 1, "title": 1, "artists": 1})
+    audios = database.audios.find({"release_year": {"$exists": False}}, {"link": 1, "title": 1, "artists": 1})
 
     if not audios:
         print("Все года проставлены")
