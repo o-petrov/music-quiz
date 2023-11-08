@@ -1,6 +1,7 @@
 from urllib.request import urlopen, Request
 from urllib.parse import urlencode
 from time import sleep
+from yandex_music import Client
 import json
 import re
 import unicodedata
@@ -8,7 +9,19 @@ import unicodedata
 from src.database import database
 
 
-tracks_not_found = []
+__tracks_not_found = []
+__tracks_found_other = []
+
+
+def audio_desc(audio):
+    return ", ".join(a["name"] for a in audio["artists"]) + f" — {audio['track']} ({audio['year']})\n"
+
+
+def rec_desc(rec):
+    result = ", ".join(credit["name"] for credit in rec["artist-credit"]) + " — " + rec['title']
+    if "first-release-date" in rec:
+        result += " (" + rec["first-release-date"] + ")"
+    return result + "\n"
 
 
 def norm(name):
@@ -121,7 +134,7 @@ def try_update_year(audio):
     releases = [r for r in recordings if titles_match(r, audio) and artists_match(r, audio)["any"]]
     if not any("first-release-date" in r for r in releases):
         # в фильтрованной выдаче нет инфы
-        tracks_not_found.append(audio)
+        __tracks_not_found.append(audio_desc(audio))
         return
 
     releases.sort(key=lambda r: r.get("first-release-date", "2900"))
@@ -139,8 +152,29 @@ def try_update_year(audio):
         return
 
     # возможно сейчас в библиотеке микс
-    # TODO попробовать автоматически найти версию в яме
+    # напишем подходящие по году версии из я.мы
+    other_tracks = fetch_other_release(releases[0])
+    __tracks_found_other += [
+        audio_desc(audio),
+        "https://music.yandex.ru/track/{audio['track_id']}\n",
+        rec_desc(releases[0])
+    ] + [
+        "https://music.yandex.ru/track/{t}\n"
+        for t in other_tracks
+    ] + ["\n"]
     return
+
+
+def fetch_other_release(rec):
+    client = Client().init()
+    release_year = int(rec["first-release-date"][:4])
+    r = client.search(rec["title"]).tracks.results
+    possible_originals = []
+    for t in r:
+        first_album_year = min(a.year or 2900 for a in t.albums)
+        if first_album_year <= release_year and artists_match(rec, t)["any"]:
+            possible_originals.append(t.track_id)
+    return possible_originals
 
 
 def main():
@@ -148,7 +182,10 @@ def main():
 
     # выборка песен без обновлённого года выпуска
     # мэтчим с MB по артистам и названию
-    audios = database.audios.find({"release_year": {"$exists": False}}, {"link": 1, "title": 1, "artists": 1})
+    audios = database.audios.find(
+        {"release_year": {"$exists": False}},
+        {"link": 1, "title": 1, "artists": 1, "track_id": 1}
+    )
 
     if not audios:
         print("Все года проставлены")
@@ -162,6 +199,11 @@ def main():
     for audio in audios:
         sleep(1)  # вроде надо не чаще раза в секунду с одного IP
         try_update_year(audio)
+
+    with open("tracks-not-found.txt", "w", encoding="utf8") as f:
+        f.writelines(__tracks_not_found)
+    with open("tracks-found-other.txt", "w", encoding="utf8") as f:
+        f.writelines(__tracks_found_other)
 
 
 if __name__ == '__main__':
