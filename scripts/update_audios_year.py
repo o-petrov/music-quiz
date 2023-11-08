@@ -56,27 +56,30 @@ def norm(name):
     return wo_punct
 
 
-def am2(rec, audio):
+def artists_match(rec, audio):
     audio_artists = [norm(credit["name"]) for credit in audio["artists"]]
     rec_artists = []
     for credit in rec["artist-credit"]:
         rec_artists.append(norm(credit["artist"]["name"]))
         rec_artists[-1].update(norm(credit["name"]))
 
-    matched_r = any(any(
+    matched_r = sum(any(
         r_name in a_name or a_name in r_name
         for r_name in r_names
         for a_names in audio_artists
         for a_name in a_names
     ) for r_names in rec_artists)
-    matched_a = any(any(
+    matched_a = sum(any(
         r_name in a_name or a_name in r_name
         for a_name in a_names
         for r_names in rec_artists
         for r_name in r_names
     ) for a_names in audio_artists)
 
-    return matched_a and matched_r
+    return {
+        "any": matched_a > 0 and matched_r > 0,
+        "all": matched_a == len(audio_artists) and matched_r == len(rec_artists)
+    }
 
 
 def title_for_search(name):
@@ -93,7 +96,7 @@ def title_for_search(name):
     return bare_name
 
 
-def tm2(rec, audio):
+def titles_match(rec, audio):
     rt = title_for_search(rec["title"])
     at = title_for_search(audio["track"])
     return rt == at or rt + ' ' + rt == at or at + ' ' + at == rt
@@ -115,7 +118,7 @@ def try_update_year(audio):
         html = responce.read()
     recordings = json.loads(html)["recordings"]
     # в выдаче может быть совсем не то...
-    releases = [r for r in recordings if tm2(r, audio) and am2(r, audio)]
+    releases = [r for r in recordings if titles_match(r, audio) and artists_match(r, audio)["any"]]
     if not any("first-release-date" in r for r in releases):
         # в фильтрованной выдаче нет инфы
         tracks_not_found.append(audio)
@@ -132,8 +135,7 @@ def try_update_year(audio):
     if audio["year"] < first_release - 1:
         return
 
-    rm, rt, am, at = am2(releases[0], audio, count=True)
-    if rm == rt and am == at:
+    if artists_match(releases[0], audio)["all"]:
         return
 
     # возможно сейчас в библиотеке микс
