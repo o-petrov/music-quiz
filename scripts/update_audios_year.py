@@ -9,10 +9,6 @@ import unicodedata
 from src.database import database
 
 
-__tracks_not_found = []
-__tracks_found_other = []
-
-
 def audio_desc(audio):
     return ", ".join(a["name"] for a in audio["artists"]) + f" — {audio['track']} ({audio['year']})\n"
 
@@ -146,15 +142,15 @@ def try_update_year(audio):
     )
 
     if audio["year"] < first_release - 1:
-        return
+        return []
 
     if artists_match(releases[0], audio)["all"]:
-        return
+        return []
 
     # возможно сейчас в библиотеке микс
     # напишем подходящие по году версии из я.мы
     other_tracks = fetch_other_release(releases[0])
-    __tracks_found_other += [
+    return [
         audio_desc(audio),
         "https://music.yandex.ru/track/{audio['track_id']}\n",
         rec_desc(releases[0])
@@ -162,7 +158,6 @@ def try_update_year(audio):
         "https://music.yandex.ru/track/{t}\n"
         for t in other_tracks
     ] + ["\n"]
-    return
 
 
 def fetch_other_release(rec):
@@ -196,14 +191,21 @@ def main():
     hh, mm = in_minutes // 60, in_minutes % 60
     print(f"Обновление годов для всех {len(audios)} треков с musicbrainz.org займёт {hh}:{mm:02}:{ss:02}")
 
+    tracks_not_found = []
+    tracks_found_other = []
+    
     for audio in audios:
         sleep(1)  # вроде надо не чаще раза в секунду с одного IP
         try_update_year(audio)
+        if others is None:
+            tracks_not_found.append(audio_desc(audio))
+        else:
+            tracks_found_other.extend(others)
 
     with open("tracks-not-found.txt", "w", encoding="utf8") as f:
-        f.writelines(__tracks_not_found)
+        f.writelines(tracks_not_found)
     with open("tracks-found-other.txt", "w", encoding="utf8") as f:
-        f.writelines(__tracks_found_other)
+        f.writelines(tracks_found_other)
 
 
 if __name__ == '__main__':
